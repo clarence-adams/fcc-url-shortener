@@ -3,19 +3,18 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 const dns = require('dns');
+const {URL} = require('url');
 const mongoose = require('mongoose');
 const {Schema} = mongoose;
 var bodyParser = require('body-parser');
 
 mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
-console.log(mongoose.connection.readyState)
-
 const urlSchema = new Schema ({
   url: String
 })
 
-const Url = mongoose.model("Url", urlSchema);
+const UrlPair = mongoose.model("Url", urlSchema);
 
 // Basic Configuration
 const port = process.env.PORT || 3000;
@@ -39,41 +38,67 @@ app.listen(port, function() {
 
 app.use("/api/shorturl", bodyParser.urlencoded({extended: false}))
 
-app.post("/api/shorturl/new", (req, res, done) => {
+app.post("/api/shorturl", (req, res, done) => {
+  const originalUrl = req.body.url
+  // error checks creating a new URL object
+  try {
+    const urlObject = new URL(originalUrl)
+  } catch (error) {
+    return res.json({
+      "error": "invalid url"
+    })
+  }
 
-  let newUrl = new Url({
-    url: req.body.url
-  })
+  // creates a URL object that can be easily parsed
+  const urlObject = new URL(originalUrl)
 
-  console.log(newUrl._id)
-  console.log(mongoose.connection.readyState)
+  if (urlObject.protocol != "http:" && urlObject.protocol != "https:") {
+    return res.json({
+      "error": "invalid url"
+    })
+  }
 
-  newUrl.save((err, data) => {
+  // URL validation
+  dns.lookup(urlObject.hostname, (err, address, family) => {
     if (err) {
-      return console.lerror(err)
+      return res.json({
+        "error": "invalid url"
+      })
     } else {
-      done(null, data)
+        let newUrl = new UrlPair({
+          url: originalUrl
+      })
+
+      console.log(newUrl._id)
+      console.log(mongoose.connection.readyState)
+
+      newUrl.save((err, data) => {
+        if (err) {
+          return console.lerror(err)
+        } else {
+          done(null, data)
+        }
+      })
+      
+      res.json({
+        "original_url": originalUrl, 
+        "short_url": newUrl._id
+      })
     }
-  })
-  
-  res.json({
-    "url": req.body.url,
-    "short_url": newUrl._id
   })
 })
 
-app.get("/api/shorturl/:shortUrl", (req, res) => {
+app.get("/api/shorturl/:shortUrl", (req, res, done) => {
   let shortUrl;
 
-  Url.findById(req.params.shortUrl, (err, data, done) => {
-
+  UrlPair.findById(req.params.shortUrl, (err, data) => {
     shortUrl = data.url
     console.log(shortUrl)
-    res.redirect(shortUrl)
 
     if (err) {
       return console.log(err)
     } else {
+      res.redirect(shortUrl)
       done(null, data)
     }
   })
