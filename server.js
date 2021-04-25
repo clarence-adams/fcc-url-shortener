@@ -74,7 +74,7 @@ app.post("/api/shorturl", (req, res, done) => {
 
       newUrl.save((err, data) => {
         if (err) {
-          return console.lerror(err)
+          return console.log(err)
         } else {
           done(null, data)
         }
